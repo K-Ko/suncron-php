@@ -1,0 +1,11 @@
+{
+    "require": {
+        "aura/cli": "^2.2",
+        "secondparty/dipper": "^0.5.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Suncron\\": "src/"
+        }
+    }
+}
