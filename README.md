@@ -51,7 +51,7 @@ Remove with
 
 ## Usage
 
-Configuration file templates are found in [`dist`](tree/master/dist).
+Configuration file templates are found in [`dist`](https://github.com/K-Ko/suncron-php/tree/master/dist).
 
 A configuration file has a Location section, an optional Environment section and a rule section.
 
