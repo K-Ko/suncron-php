@@ -20,6 +20,10 @@ or download an archive
     unzip -qqd suncron-php suncron-php.zip
     rm suncron-php.zip
 
+Install required Composer packages
+
+    composer update --no-dev
+
 ## Usage
 
 The idea is to execute programs depending on sunset or sunrise.
