@@ -27,10 +27,12 @@ or download an archive
     unzip -qqd suncron-php suncron-php.zip
     rm suncron-php.zip
 
+## Usage
+=======
 SunCron/PHP uses some other repositories via [Composer](https://getcomposer.org/).
 
     cd suncron-php
-    composer -a --apcu-autoloader update
+    composer -a --apcu-autoloader --no-dev update
 
 ### Global
 
@@ -132,7 +134,7 @@ Required, missing command will raise an exception.
 ### Output
 The resulting cron data will be written by default to a file named like this:
 
-> Configuration file '/path/to/**suncron**.yaml' will result in '/etc/cron.d/**suncron**'
+> Configuration file '/path/to/**default**.yaml' will result in '/etc/cron.d/**suncron-php-default**'
 
 You can redirect the output also to an other file or to stdout with command line switches.
 
