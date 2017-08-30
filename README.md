@@ -2,13 +2,20 @@
 
 **Generate cron entries from rules based on sunset and/or sunrise**
 
-Project is highly inspired by [6feet5/suncron](https://github.com/6feet5/suncron).
+The idea is to execute programs depending on sunset or sunrise.
 
-Suncron-php uses a similar rule definition scheme.
+The project is supposed to execute at midnight and calculate todays sunrise and sunset times.
+It will use a configuration file with a set of rules and update a cron file with the new values.
+
+Project is highly inspired by [6feet5/suncron](https://github.com/6feet5/suncron)
+and uses a similar rule definition scheme.
+
 
 ## Installation
 
-Just clone the repository with
+### Repository
+
+Just clone the repository
 
     cd ~
     git clone https://github.com/K-Ko/suncron-php.git
@@ -20,20 +27,35 @@ or download an archive
     unzip -qqd suncron-php suncron-php.zip
     rm suncron-php.zip
 
-Install required Composer packages
+## Usage
+=======
+SunCron/PHP uses some other repositories via [Composer](https://getcomposer.org/).
 
-    composer update --no-dev
+    cd suncron-php
+    composer -a --apcu-autoloader --no-dev update
+
+### Global
+
+There is also a very simple Makefile which
+
+- Links `suncron.php` to `/usr/bin/suncron`
+- Copies the example configuration files to `/etc/default`
+- Installs a daily cron job /etc/cron.d`/suncron-daily` with
+  `10 0 * * * root /usr/bin/suncron /etc/default/suncron.yaml`
+
+To install run
+
+    make install
+
+Remove with
+
+    make uninstall
 
 ## Usage
 
-The idea is to execute programs depending on sunset or sunrise.
+Configuration file templates are found in [`dist`](https://github.com/K-Ko/suncron-php/tree/master/dist).
 
-The project is supposed to execute at midnight and calculate todays sunrise and sunset times.
-It will use a configuration file with a set of rules and update the cron file with the new values.
-
-Configuration file templates are found in [`dist`](/tree/master/dist). 
-
-A configuration file has a Location section and a rule section.
+A configuration file has a Location section, an optional Environment section and a rule section.
 
 ## Location
 
@@ -47,9 +69,9 @@ Geographic coordinates for the east-west (-180° ... 180°) position of a point 
 Calculate the times for the given timezone., will use content of `/etc/timezone` if omitted.
 
 #### Zenith
-So sunrise and sunset actually occur when the Sun has altitude -0°50' (34' for refraction, and another 16' for the semi-diameter of the disc).
+So sunrise and sunset actually occur when the Sun has altitude -0°50' (34' for refraction, and another 16' for the semi-diameter of the disc), aka 90+50/60.
 
-- `90 + 50/60` (default)
+> `Zenith: 90.83333333333333` (default)
 
 You can also use other "sunrise"/"sunset" definitions...
 
@@ -57,90 +79,73 @@ Since the atmosphere scatters sunlight, the sky does not become dark instantly a
 
 During **civil twilight**, it is still light enough to carry on ordinary activities out-of-doors. This continues until the Sun's altitude is -6°.
 
-- `Zenith: 96`
+> `Zenith: 96`
 
 During **nautical twilight**, it is dark enough to see the brighter stars,
 but still light enough to see the horizon, enabling sailors to measure stellar altitudes for navigation
-This continues until the Sun's altitude is -12°. 
+This continues until the Sun's altitude is -12°.
 
-- `Zenith: 102`
+> `Zenith: 102`
 
-During **astronomical twilight**, the sky is still too light for making reliable astronomical observations; 
-this continues until the Sun's altitude is -18°. 
+During **astronomical twilight**, the sky is still too light for making reliable astronomical observations;
+this continues until the Sun's altitude is -18°.
 
-- `Zenith: 108`
+> `Zenith: 108`
+
+## Environement
+If you need special environment setting, define them here.
+
+> `VARIABLE: value`
 
 ## Rules
-Each rule consists of four parts:
+Each rule consists of up to eight parts:
 
 #### `if`
-Formula describing a logical condition, eg. 'sunrise > 7:00' to test if sun rises before 7:00.
+Formula describing a logical condition
 
-The condition is optional and defaults to `true`if omitted.
+> `if: sunrise > 7:00` # test if sun rises before 7:00
 
-#### `then`
-#### `else`
-Formulas or times to use if the condition is true/false, eg. 'sunrise + 3:00' for three hours after sunrise.
-Or you can leave it empty to ignore it.
+The condition is optional and defaults to `true` if omitted.
 
-Both are optional and defaults to `null` if omitted and rule will be skipped.
+#### `then`, `else`
+Formulas or times to use if the condition is true/false
 
-#### `cron`
-A cron line part **without** the minute and hour field, eg. `* * [1-4] root /path/to/command arg`
+> `then: sunrise + 3:00` # three hours after sunrise
+
+You can leave then empty to ignore them.
+
+Both are optional and defaults to `null` if omitted and the rule will be skipped.
+
+#### `day`, `month`, `dow`
+The 3rd to 5th field (day, month and day of week) of a crontab entry.
+
+See `man 5 crontab` or eg. [Wikipedia](https://en.wikipedia.org/wiki/Cron#CRON_expression) for syntax help.
+
+They defaults all to `*`.
+
+#### `user`
+The user which will run the command, defaults to `root`.
+
+#### `cmd`
+The command to run via cron.
+
+Required, missing command will raise an exception.
 
 ### Output
-The resulting cron data will be writtenby default to a file named like this:
-/path/to/**suncron**.yaml > /etc/cron.d/**suncron**
+The resulting cron data will be written by default to a file named like this:
 
-You can redirect the output also to an other file or to stdout with command line switches,
-see `./suncron.php --help` for reference.
+> Configuration file '/path/to/**default**.yaml' will result in '/etc/cron.d/**suncron-php-default**'
+
+You can redirect the output also to an other file or to stdout with command line switches.
 
 ## Run
 
 Best run SunCron/PHP at or shortly after midnight.
 
-**Always** run SunCron/PP as `root` user, script must write to file(s) in `/etc/cron.d/`!
+**Always** run SunCron/PHP as `root` user, script must write to file(s) in `/etc/cron.d/`!
 
 Either via root crontab ( `sudo crontab -e` )
 
-    0 * * * /path/to/suncron.php /path/to/config.yaml
+    10 0 * * /path/to/suncron.php /path/to/config.yaml
 
-or with an own cron file in `/etc/cron.d/`
-
-    echo '0 * * * root /path/to/suncron.php /path/to/config.yaml' | sudo tee /etc/cron.d/suncron-php
-
-## Command line
-
-```
-* * *  SunCron/PHP v0.1.0 (2017-04-03)  * * *
-
-SUMMARY
-    ./suncron.php -- Create crontabs relative to sunrise and sunset.
-
-USAGE
-    ./suncron.php [options] <config file>
-
-DESCRIPTION
-    See dist/*.yaml for examples and details
-    Github: https://github.com/K-Ko/suncron-php
-
-OPTIONS
-    -s
-    --stdout
-        Write cron entries to stdout.
-
-    -o <value>
-    --output=<value>
-        Write cron entries to file <value>.
-
-    -t
-    --test
-        Test mode, only analyse configuration
-
-    -v [-v [...]]
-        Verbosity level, multiple use increases verbosity
-
-    --help
-        This help
-```
-
+or with an own cron file in `/etc/cron.d/`.

@@ -99,7 +99,7 @@ class TimesParser
         );
 
         // Any replacements?
-        if ($str <> $instr) $this->debug[] = [1, $str];
+        if ($str <> $instr) $this->debug[] = $str;
 
         if (preg_match_all('~[0-9]{1,2}:[0-9]{2}~', $str, $times)) {
             foreach ($times[0] as $time) {
@@ -107,7 +107,7 @@ class TimesParser
                 $midnight  = floor($timestamp / 86400) * 86400;
                 $str = str_replace($time, $timestamp - $midnight, $str);
             }
-            $this->debug[] = [3, $str . ' (in seconds)'];
+            $this->debug[] = $str . ' (in seconds)';
         }
 
         // http://stackoverflow.com/a/20025298
