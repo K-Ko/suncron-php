@@ -28,11 +28,11 @@ or download an archive
     rm suncron-php.zip
 
 ## Usage
-=======
+
 SunCron/PHP uses some other repositories via [Composer](https://getcomposer.org/).
 
     cd suncron-php
-    composer -a --apcu-autoloader --no-dev update
+    composer -ao --apcu-autoloader --no-dev update
 
 ### Global
 
