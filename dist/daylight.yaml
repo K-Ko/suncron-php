@@ -7,7 +7,9 @@
 Location:
     # Location information is needed to calculate a correct sunrise and sunset.
 
+    #
     # The coordinates must be decimal degrees.
+    #
     Latitude:  59.05
     Longitude: 17.3
 
@@ -43,15 +45,13 @@ Environment:
     # See man 5 crontab for reference
     #
     #SHELL: /bin/bash
-    #PATH: ~/bin:/usr/bin/:/bin
+    #PATH: ~/bin:/usr/local/bin:/usr/bin/:/bin
     #MAILTO: ""
 
 # ----------------------------------------------------------------------------
 Rules:
     #
     # This section lists the rules that are transformed into cron entries.
-    #
-    # Each rules has the following format:
     #
     # Each rules has the following format:
     #
@@ -80,23 +80,29 @@ Rules:
     # --------------------------------------------------------------------------
 
     #
-    # Full example, force ELSE condition
+    # Sunrise
     #
-    -   if:   sunset < 12:00                    # Sun sets before 18:00
-        then: 17:00                             # Execute at 17:00
-        else: sunset - 1:00                     # Execute an hour before sunset
-        dow:  6,7                               # Run every Saturday and Sunday
-        cmd:  ls >/dev/null /root
+    -   then: sunrise                                  # Execute at sunrise
+              # Put sunrise and sunset into flag file
+        cmd:  echo '$sunrise-$sunset' >/run/daylight
 
     #
-    # Do nothing in case of false
+    # Sunset
     #
-    -   if:   sunrise > 7:00                    # Sun rises after 7:00
-        then: 6:15                              # Execute at 6:15
-        cmd:  echo TEST>/dev/null
+    -   then: sunset                                   # Execute at sunset
+        cmd:  rm /run/daylight 2>/dev/null
+
+    # --------------------------------------------------------------------------
 
     #
-    # Run always
+    # One hour before sunrise
     #
-    -   then: sunset                            # Execute at sunset
-        cmd:  echo TEST>/dev/null
+    -   then: sunrise - 1:00                              # Execute one hour before sunrise
+              # Put real sunrise and sunset timestamps into flag file
+        cmd:  printf "$sunrise_ts\n$sunset_ts\n" >/run/daylight-60
+
+    #
+    # One hour after sunset
+    #
+    -   then: sunset + 1:00                               # Execute one hour after sunset
+        cmd:  rm /run/daylight-60 2>/dev/null

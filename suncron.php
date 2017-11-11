@@ -23,22 +23,25 @@ $cli     = new CliFactory;
 $context = $cli->newContext($GLOBALS);
 $logger  = new Logger($cli->newStdio());
 
-$version = PHP_EOL
-         . '<<bold yellow>>* * *  SunCron/PHP v'.file_get_contents(__DIR__.'/.version').'  * * *<<reset>>'
-         . PHP_EOL;
+$version = '<<bold yellow>>SunCron/PHP v'.file_get_contents(__DIR__.'/.version').'<<reset>>';
 
 /**
  * Command line options
  */
 $options = [
     's,stdout'  => 'Write cron entries to stdout.',
-    'o,output:' => 'Write cron entries to file <value>.',
     't,test'    => 'Test mode, only analyse configuration (sets verbosity to 1)',
+    'r,remove'  => 'Remove the created cron file',
     'v*'        => 'Verbosity level, multiple use increases verbosity (max. 2)',
-    'help'      => 'This help',
+    'h,help'    => 'This help',
 ];
 
 $getopt = $context->getopt(array_keys($options));
+
+$self = $getopt->get(0);
+if (substr($self, 0, 1) != DIRECTORY_SEPARATOR) {
+    $self = realpath($self);
+}
 
 $error = false;
 
@@ -50,7 +53,7 @@ if ($getopt->hasErrors()) {
     $logger->err();
 };
 
-$showHelp = $getopt->get('--help');
+$showHelp = $getopt->get('-h');
 
 if (!$showHelp && '' == $conf_file = $getopt->get(1)) {
     $error = true;
@@ -58,11 +61,14 @@ if (!$showHelp && '' == $conf_file = $getopt->get(1)) {
     $logger->err();
 }
 
+
 /**
  * Usage
  */
 if ($error || $showHelp) {
+    $logger->err(0);
     $logger->err(0, $version);
+    $logger->err(0);
 
     $help = new Help(new OptionFactory);
 
@@ -73,7 +79,7 @@ if ($error || $showHelp) {
     	'See <<bold>>dist/*.yaml<<reset>> for examples and details'.PHP_EOL
        .'    Github: https://github.com/K-Ko/suncron-php'
     );
-    $logger->err(0, $help->getHelp($getopt->get(0)));
+    $logger->err(0, $help->getHelp($self));
 
     exit(isset($errors) ? Status::FAILURE : Status::SUCCESS);
 }
@@ -82,20 +88,40 @@ $test      = $getopt->get('-t', false);
 $verbose   = count($getopt->get('-v', []));
 $conf_file = realpath($conf_file);
 
-if ($test) {
-    $logger->err(0, $version);
-    $logger->err(0, '<<bold>><<green>>TEST mode, don\'t write crontab'.PHP_EOL);
-    $verbose++;
-}
+$test && $verbose++;
 
 $logger->setLevel($verbose);
+
+$logger->err(1);
+$logger->err(1, $version);
+$logger->err(1);
+
+if ($test) {
+    $logger->err(0, '<<bold>><<green>>TEST mode, don\'t write crontab');
+}
 
 /**
  *
  */
 try {
 
-    $logger->err(1, 'Config file', $conf_file);
+    if ($getopt->get('-r')) {
+        // Build file name from config file
+        $output = pathinfo($conf_file);
+        $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
+        if (is_file($output)) {
+            if (@unlink($output)) {
+                $logger->out(0, '<<green>>Removed '.$output.'<<reset>>');
+            } else {
+                throw new Exception('Can\'t remove \''.$output.'\', must run as root!');
+            }
+        } else {
+            throw new Exception('Missing \''.$output.'\'');
+        }
+        exit;
+    }
+
+    $logger->err(1, 'Config file : ' . $conf_file);
 
     $conf = array_merge(
         [ 'Location' => [], 'Environment' => [], 'Rules' => [] ],
@@ -111,7 +137,7 @@ try {
         $loc['Latitude'], $loc['Longitude'], $loc['Timezone'], $loc['Zenith']
     );
 
-    $logger->err(1, 'Sunrise - Sunset', $TimesParser->getSunrise(), '-', $TimesParser->getSunset());
+    $logger->err(1, 'Sunrise - Sunset : ' . $TimesParser->getSunrise() . ' - ' . $TimesParser->getSunset());
 
     $crons = [];
 
@@ -119,11 +145,22 @@ try {
     foreach ($conf['Rules'] as $idx=>$rule) {
 
         $rule = array_merge(
-            [ 'if' => true, 'then' => null, 'else' => null,
-              'day' => '*', 'month' => '*', 'dow' => '*',
-              'user' => 'root', 'cmd' => null ],
+            [
+                'if'    => true,
+                'then'  => null,
+                'else'  => null,
+                'day'   => '*',
+                'month' => '*',
+                'dow'   => '*',
+                'user'  => 'root',
+                'cmd'   => null
+            ],
             $rule
         );
+
+        if (empty($rule['user'])) {
+            throw new Exception('Missing user to run in rule #'.($idx+1));
+        }
 
         if (empty($rule['cmd'])) {
             throw new Exception('Missing command to run in rule #'.($idx+1));
@@ -150,7 +187,7 @@ try {
             }
             $logger->err(2, $label.' result', date('H:i', $time));
 
-            $cmd = sprintf("%02d\t%02d\t%s\t%s\t%s\t%s\t%s",
+            $cmd = sprintf('%d %d %s %s %s %s %s',
                 date('i', $time), date('H', $time),
                 $rule['day'], $rule['month'], $rule['dow'], $rule['user'],
                 str_replace(
@@ -173,22 +210,14 @@ try {
             // Output crontab to stdout
             $output = '-';
         } else {
-            $output = $getopt->get('-o');
-            if ('' == $output) {
-                // Build file name from config file
-                $output = pathinfo($conf_file);
-                $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
-            }
+            // Build file name from config file
+            $output = pathinfo($conf_file);
+            $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
         }
-
-        $build = realpath($getopt->get(0)).' '.$conf_file;
 
         $crontab = [
             '#',
             '# WARNING - this file is automatically generated, changes will be lost!',
-            '#',
-            '# Build with',
-            '# ' . $build,
             '#',
             null
         ];
@@ -196,27 +225,32 @@ try {
         if (!empty($conf['Environment'])) {
             // Add  settings to cron file
             foreach ($conf['Environment'] as $key=>$value) {
-            	$crontab[] = sprintf('%s = "%s"', $key, $value);
+            	$crontab[] = sprintf('%s="%s"', $key, $value);
             }
             $crontab[] = null;
         }
+
+        $crontab[] = '# Run itself and re-create file each night';
+        $crontab[] = '5 0 * * * root '.$self.' '.$conf_file;
+        $crontab[] = null;
+        $crontab[] = '# Suncron entries';
 
         // Add header lines and environment to cron lines
         $crontab = implode(PHP_EOL, array_merge($crontab, $crons));
 
         if ($output == '-') {
             $logger->out(0, '<<blue>>'.$crontab);
-        } elseif ($bytes = @file_put_contents($output, $crontab)) {
-            $logger->err(2, '<<blue>>'.$crontab);
-            $logger->err(1, '<<green>>Wrote '.$bytes.' Bytes to \''.$output.'\'');
-            $logger->err(1, str_repeat('-', 60));
-            $logger->err(1, 'Put this into root crontab:');
-            $logger->err(1, '0 * * * * ' . $build);
         } else {
-            throw new Exception('Can\'t write \''.$output.'\', must run as root');
+            $bytes = @file_put_contents($output,  $crontab.PHP_EOL.PHP_EOL.'# EOF');
+            if ($bytes > 0) {
+                $logger->err(2, '<<blue>>'.$crontab);
+                $logger->err(2, str_repeat('-', 60));
+                $logger->out(0, '<<green>>Wrote '.$bytes.' Bytes to \''.$output.'\'');
+            } else {
+                throw new Exception('Can\'t write \''.$output.'\', must run as root!');
+            }
         }
     }
-
 } catch (Exception $e) {
     $logger->err();
     $logger->error($e->getMessage());
