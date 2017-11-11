@@ -1,41 +1,36 @@
 INSTALL_DIR ?= /usr/bin
 
+# Some defaults
+BIN_FILE = ${INSTALL_DIR}/suncron-php
+CFG_DIR = /etc/suncron-php
+CFG = ${CFG_DIR}/daylight.yaml
+
 .PHONY: default install uninstall 
 
 .DEFAULT:
 	@echo "Usage: make install|uninstall"
 
 default:
-	@echo "make install|uninstall"
+	@echo "Usage: make install|uninstall"
 
 install:
-	@echo "Installing ..."
-	@echo
+	@echo "::: Install ..."
+	@echo 
 
-	ln -s ${CURDIR}/suncron.php ${INSTALL_DIR}/suncron
+	ln -sf ${CURDIR}/suncron.php ${BIN_FILE}
 
-	@install -d /etc/default
-	install -m644 dist/suncron*.yaml /etc/default/
-
-	@sed < dist/suncron.sh >/tmp/suncron.sh -e "s#SUNCRON_PATH#${INSTALL_DIR}#"
-	@install -m644 /tmp/suncron.sh /etc/cron.d/suncron-daily
-	@rm -f /tmp/suncron.sh
+	@install -d ${CFG_DIR}
+	install -m644 ${CURDIR}/dist/* ${CFG_DIR}/
 
 	@echo
-	@echo "Installed a daily run of /etc/default/suncron.yaml"
-	@echo "Edit /etc/default/suncron.yaml or /etc/cron.d/suncron-daily for your needs"
-	@echo
-
-	@echo "Done."
+	@echo "::: Done"
 
 uninstall:
-	@echo "Uninstalling ..."
+	@echo "::: Uninstall ..."
 	@echo
 
-	rm -f /etc/cron.d/suncron-daily
-	rm -f ${INSTALL_DIR}/suncron
-	rm -f /etc/default/suncron*.yaml
+	rm -rf ${CFG_DIR} ${BIN_FILE}
 
 	@echo
-	@echo "Done"
+	@echo "::: Done"
 

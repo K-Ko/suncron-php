@@ -1,6 +1,6 @@
 # SunCron/PHP
 
-**Generate cron entries from rules based on sunset and/or sunrise**
+## Generate cron entries from rules based on sunset and/or sunrise
 
 The idea is to execute programs depending on sunset or sunrise.
 
@@ -15,60 +15,57 @@ and uses a similar rule definition scheme.
 
 ### Repository
 
-Just clone the repository
-
     cd ~
     git clone https://github.com/K-Ko/suncron-php.git
 
-or download an archive
+### Download
 
     cd ~
     wget -qO suncron-php.zip https://github.com/K-Ko/suncron-php/archive/master.zip
     unzip -qqd suncron-php suncron-php.zip
     rm suncron-php.zip
 
-## Usage
+### Prepare dependencies
 
 SunCron/PHP uses some other repositories via [Composer](https://getcomposer.org/).
 
     cd suncron-php
-    composer -ao --apcu-autoloader --no-dev update
+    composer -o --no-dev update
 
-### Global
+### Global install
 
-There is also a very simple Makefile which
+There is also a very simple `Makefile` to
 
-- Links `suncron.php` to `/usr/bin/suncron`
-- Copies the example configuration files to `/etc/default`
-- Installs a daily cron job /etc/cron.d`/suncron-daily` with
-  `10 0 * * * root /usr/bin/suncron /etc/default/suncron.yaml`
+- Link `suncron.php` to `/usr/bin/suncron-php`
+- Copy the example configuration files to `/etc/suncron-php`
 
 To install run
 
-    make install
+    sudo make install
 
 Remove with
 
-    make uninstall
+    sudo make uninstall
 
-## Usage
+# Usage
 
-Configuration file templates are found in [`dist`](https://github.com/K-Ko/suncron-php/tree/master/dist).
+Configuration file templates are found in
+[`dist`](https://github.com/K-Ko/suncron-php/tree/master/dist).
 
 A configuration file has a Location section, an optional Environment section and a rule section.
 
 ## Location
 
-#### Latitude
+### Latitude
 Geographic coordinates for the north–south (-90° ... 90°) position of a point on the Earth's surface.
 
-#### Longitude
+### Longitude
 Geographic coordinates for the east-west (-180° ... 180°) position of a point on the Earth's surface.
 
-#### Timezone
+### Timezone
 Calculate the times for the given timezone., will use content of `/etc/timezone` if omitted.
 
-#### Zenith
+### Zenith
 So sunrise and sunset actually occur when the Sun has altitude -0°50' (34' for refraction, and another 16' for the semi-diameter of the disc), aka 90+50/60.
 
 > `Zenith: 90.83333333333333` (default)
@@ -100,52 +97,159 @@ If you need special environment setting, define them here.
 ## Rules
 Each rule consists of up to eight parts:
 
-#### `if`
+### `if`
 Formula describing a logical condition
 
-> `if: sunrise > 7:00` # test if sun rises before 7:00
+> `if: sunrise < 7:00` # test if sun rises before 7:00
 
-The condition is optional and defaults to `true` if omitted.
+*Optional, defaults to `true`*
 
-#### `then`, `else`
+### `then`, `else`
 Formulas or times to use if the condition is true/false
 
 > `then: sunrise + 3:00` # three hours after sunrise
 
 You can leave then empty to ignore them.
 
-Both are optional and defaults to `null` if omitted and the rule will be skipped.
+*Optional, defaults to `null`; if omitted the rule will be skipped*
 
-#### `day`, `month`, `dow`
+### `day`, `month`, `dow`
 The 3rd to 5th field (day, month and day of week) of a crontab entry.
 
 See `man 5 crontab` or eg. [Wikipedia](https://en.wikipedia.org/wiki/Cron#CRON_expression) for syntax help.
 
-They defaults all to `*`.
+*Optional, defaults to `*`*
 
-#### `user`
-The user which will run the command, defaults to `root`.
+### `user`
+The user which will run the command
 
-#### `cmd`
+*Optional, defaults to `root`*
+
+### `cmd`
 The command to run via cron.
 
-Required, missing command will raise an exception.
+*Required, missing command will raise an exception*
 
-### Output
+## Output
 The resulting cron data will be written by default to a file named like this:
 
-> Configuration file '/path/to/**default**.yaml' will result in '/etc/cron.d/**suncron-php-default**'
+> Configuration file: /path/to/**default**.yaml
+> Cron file: /etc/cron.d/**suncron-php-default**
 
-You can redirect the output also to an other file or to stdout with command line switches.
+You can redirect the output also to stdout with command line switch `-s`.
+
+This is also the way to put the file content into another file if needed:
+
+    $ suncron-php -s dist/daylight.yaml | sudo tee /etc/cron.d/file-name
 
 ## Run
 
-Best run SunCron/PHP at or shortly after midnight.
+If you defined your configuration, test it with
 
-**Always** run SunCron/PHP as `root` user, script must write to file(s) in `/etc/cron.d/`!
+    $ suncron-php -t <your-config-file.yaml>
 
-Either via root crontab ( `sudo crontab -e` )
+The configuration file can be given as absolute or relative path.
 
-    10 0 * * /path/to/suncron.php /path/to/config.yaml
+#### Example
 
-or with an own cron file in `/etc/cron.d/`.
+    $ suncron-php -t dist/daylight.yaml
+
+    SunCron/PHP v1.1.0 (2017-11-11)
+
+    TEST mode, don't write crontab
+    Config file : /home/user/suncron-php/dist/daylight.yaml
+    Sunrise - Sunset : 7:32 - 15:37
+    ------------------------------------------------------------
+    1 | sunrise |  | * | * | * | root | echo '$sunrise-$sunset' >/run/daylight
+    32 7 * * * root echo '7:32-15:37' >/run/daylight
+    ------------------------------------------------------------
+    1 | sunset |  | * | * | * | root | rm /run/daylight 2>/dev/null
+    37 15 * * * root rm /run/daylight 2>/dev/null
+    ------------------------------------------------------------
+    1 | sunrise - 1:00 |  | * | * | * | root | printf "$sunrise_ts\n$sunset_ts\n" >/run/daylight-60
+    32 6 * * * root printf "1510385520\n1510414620\n" >/run/daylight-60
+    ------------------------------------------------------------
+    1 | sunset + 1:00 |  | * | * | * | root | rm /run/daylight-60 2>/dev/null
+    37 16 * * * root rm /run/daylight-60 2>/dev/null
+    ------------------------------------------------------------
+    #
+    # WARNING - this file is automatically generated, changes will be lost!
+    #
+
+    # Run itself and re-create file each night
+    5 0 * * * root /usr/bin/suncron-php /home/user/suncron-php/dist/daylight.yaml
+
+    # Suncron entries
+    32 7 * * * root echo '7:32-15:37' >/run/daylight
+    37 15 * * * root rm /run/daylight 2>/dev/null
+    32 6 * * * root printf "1510385520\n1510414620\n" >/run/daylight-60
+    37 16 * * * root rm /run/daylight-60 2>/dev/null
+
+If you are not fine with the outcome, e.g. if you find "invalid" times, run the verbose test which will show the calculations made.
+
+#### Example
+
+    $ suncron-php -t -v dist/daylight.yaml
+
+    SunCron/PHP v1.1.0 (2017-11-11)
+
+    TEST mode, don't write crontab
+    Config file : /home/user/suncron-php/dist/daylight.yaml
+    Sunrise - Sunset : 7:32 - 15:37
+    ------------------------------------------------------------
+    1 | sunrise |  | * | * | * | root | echo '$sunrise-$sunset' >/run/daylight
+    IF                  : 1
+    IF result           : true
+    THEN parsed         : 7:32
+    THEN parsed         : 27120 (in seconds)
+    THEN result         : 07:32
+    32 7 * * * root echo '7:32-15:37' >/run/daylight
+    ------------------------------------------------------------
+    1 | sunset |  | * | * | * | root | rm /run/daylight 2>/dev/null
+    IF                  : 1
+    IF result           : true
+    THEN parsed         : 15:37
+    THEN parsed         : 56220 (in seconds)
+    THEN result         : 15:37
+    37 15 * * * root rm /run/daylight 2>/dev/null
+    ------------------------------------------------------------
+    1 | sunrise - 1:00 |  | * | * | * | root | printf "$sunrise_ts\n$sunset_ts\n" >/run/daylight-60
+    IF                  : 1
+    IF result           : true
+    THEN parsed         : 7:32 - 1:00
+    THEN parsed         : 27120 - 3600 (in seconds)
+    THEN result         : 06:32
+    32 6 * * * root printf "1510385520\n1510414620\n" >/run/daylight-60
+    ------------------------------------------------------------
+    1 | sunset + 1:00 |  | * | * | * | root | rm /run/daylight-60 2>/dev/null
+    IF                  : 1
+    IF result           : true
+    THEN parsed         : 15:37 + 1:00
+    THEN parsed         : 56220 + 3600 (in seconds)
+    THEN result         : 16:37
+    37 16 * * * root rm /run/daylight-60 2>/dev/null
+    ------------------------------------------------------------
+    #
+    # WARNING - this file is automatically generated, changes will be lost!
+    #
+
+    # Run itself and re-create file each night
+    5 0 * * * root /usr/bin/suncron-php /home/user/suncron-php/dist/daylight.yaml
+
+    # Suncron entries
+    32 7 * * * root echo '7:32-15:37' >/run/daylight
+    37 15 * * * root rm /run/daylight 2>/dev/null
+    32 6 * * * root printf "1510385520\n1510414620\n" >/run/daylight-60
+    37 16 * * * root rm /run/daylight-60 2>/dev/null
+
+If you are then fine with the result, run your setup **once** to create the cron file.
+**Always** run SunCron/PHP for this with `root` privileges, must write files in `/etc/cron.d/`!
+
+    $ sudo suncron-php dist/daylight.yaml
+
+This will create the cron file. You don't need to run this again,
+the cron file contains a call to recreate the cron file each night.
+
+To remove the cron file, run also as `root`
+
+    $ sudo suncron-php -r dist/daylight.yaml
