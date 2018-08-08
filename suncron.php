@@ -97,31 +97,32 @@ $logger->err(1, $version);
 $logger->err(1);
 
 if ($test) {
-    $logger->err(0, '<<bold>><<green>>TEST mode, don\'t write crontab');
+    $logger->err(0, '<<green>>TEST mode, don\'t write crontab!');
+    $logger->err(0);
 }
 
 /**
  *
  */
 try {
+    // Build file name from config file
+    $output = pathinfo($conf_file);
+    $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
 
     if ($getopt->get('-r')) {
-        // Build file name from config file
-        $output = pathinfo($conf_file);
-        $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
         if (is_file($output)) {
             if (@unlink($output)) {
                 $logger->out(0, '<<green>>Removed '.$output.'<<reset>>');
             } else {
-                throw new Exception('Can\'t remove \''.$output.'\', must run as root!');
+                throw new Exception('Can\'t remove '.$output.', must run as root!');
             }
         } else {
-            throw new Exception('Missing \''.$output.'\'');
+            throw new Exception('Missing '.$output);
         }
         exit;
     }
 
-    $logger->err(1, 'Config file : ' . $conf_file);
+    $logger->err(1, '- Configuration file : ' . $conf_file);
 
     $conf = array_merge(
         [ 'Location' => [], 'Environment' => [], 'Rules' => [] ],
@@ -137,7 +138,11 @@ try {
         $loc['Latitude'], $loc['Longitude'], $loc['Timezone'], $loc['Zenith']
     );
 
-    $logger->err(1, 'Sunrise - Sunset : ' . $TimesParser->getSunrise() . ' - ' . $TimesParser->getSunset());
+    $logger->err(1, sprintf(
+        '- Sunrise: %s, Sunset: %s',
+        $TimesParser->getSunrise(),
+        $TimesParser->getSunset()
+    ));
 
     $crons = [];
 
@@ -146,14 +151,16 @@ try {
 
         $rule = array_merge(
             [
-                'if'    => true,
-                'then'  => null,
-                'else'  => null,
-                'day'   => '*',
-                'month' => '*',
-                'dow'   => '*',
-                'user'  => 'root',
-                'cmd'   => null
+                'if'     => true,
+                'then'   => null,
+                'else'   => null,
+                'day'    => '*',
+                'month'  => '*',
+                'dow'    => '*',
+                'user'   => 'root',
+                'cronic' => false,
+                'nice'   => false,
+                'cmd'    => null
             ],
             $rule
         );
@@ -166,15 +173,25 @@ try {
             throw new Exception('Missing command to run in rule #'.($idx+1));
         }
 
-        $logger->err(1, str_repeat('-', 60));
-        $logger->err(1, implode(' | ', $rule));
+        // Build full command
+        $cmd = sprintf(
+            '%s%s%s %s',
+            $rule['user'],
+            $rule['cronic'] ? ' cronic' : '',
+            $rule['nice'] ? ' nice -n ' . $rule['nice'] : '',
+            $rule['cmd']
+        );
+        unset($rule['user'], $rule['cronic'], $rule['nice'], $rule['cmd']);
+
+        $logger->err(1, str_repeat('-', 78));
+        $logger->err(2, implode(' | ', $rule));
         $logger->err(2, 'IF', $rule['if']);
 
         $res = $TimesParser->parse($rule['if']);
         foreach ($TimesParser->getDebug() as $d) {
-        	$logger->err(2, 'IF parsed', $d);
+        	$logger->err(2, 'IF   parsed', $d);
         }
-        $logger->err(2, 'IF result', ['false','true'][$res]);
+        $logger->err(2, 'IF   result', ['false','true'][$res]);
 
         if (
             ( $res && $rule['then'] && $time = $TimesParser->parse($rule['then'])) ||
@@ -187,14 +204,18 @@ try {
             }
             $logger->err(2, $label.' result', date('H:i', $time));
 
-            $cmd = sprintf('%d %d %s %s %s %s %s',
-                date('i', $time), date('H', $time),
-                $rule['day'], $rule['month'], $rule['dow'], $rule['user'],
+            $cmd = sprintf(
+                '%d %d %s %s %s %s',
+                +date('i', $time),
+                +date('H', $time),
+                $rule['day'],
+                $rule['month'],
+                $rule['dow'],
                 str_replace(
                     [ '$sunrise_ts', '$sunset_ts', '$sunrise', '$sunset' ],
                     [ $TimesParser->getSunriseInt(), $TimesParser->getSunsetInt(),
                       $TimesParser->getSunrise(), $TimesParser->getSunset() ],
-                    $rule['cmd']
+                    $cmd
                 )
             );
             $logger->err(1, str_replace("\t", ' ', $cmd));
@@ -204,11 +225,11 @@ try {
 
     if (count($crons)) {
 
-        $logger->err(1, str_repeat('-', 60));
+        $logger->err(1, str_repeat('-', 78));
 
         if ($test || $getopt->get('-s')) {
             // Output crontab to stdout
-            $output = '-';
+            $output = false;
         } else {
             // Build file name from config file
             $output = pathinfo($conf_file);
@@ -217,7 +238,7 @@ try {
 
         $crontab = [
             '#',
-            '# WARNING - this file is automatically generated, changes will be lost!',
+            '# WARNING - this file is automatic generated, any changes will be lost!',
             '#',
             null
         ];
@@ -230,24 +251,27 @@ try {
             $crontab[] = null;
         }
 
-        $crontab[] = '# Run itself and re-create file each night';
-        $crontab[] = '5 0 * * * root '.$self.' '.$conf_file;
-        $crontab[] = null;
-        $crontab[] = '# Suncron entries';
+        if ($output) {
+            // Only if write crontab directly add auto recall line
+            $crontab[] = '# Run itself and re-create file each night';
+            $crontab[] = '5 0 * * * root '.$self.' '.$conf_file;
+            $crontab[] = null;
+        }
 
+        $crontab[] = '# Suncron entries';
         // Add header lines and environment to cron lines
         $crontab = implode(PHP_EOL, array_merge($crontab, $crons));
 
-        if ($output == '-') {
+        if (!$output) {
             $logger->out(0, '<<blue>>'.$crontab);
         } else {
             $bytes = @file_put_contents($output,  $crontab.PHP_EOL.PHP_EOL.'# EOF');
             if ($bytes > 0) {
                 $logger->err(2, '<<blue>>'.$crontab);
-                $logger->err(2, str_repeat('-', 60));
-                $logger->out(0, '<<green>>Wrote '.$bytes.' Bytes to \''.$output.'\'');
+                $logger->err(2, str_repeat('-', 78));
+                $logger->out(1, '<<green>>Wrote '.$bytes.' Bytes to '.$output);
             } else {
-                throw new Exception('Can\'t write \''.$output.'\', must run as root!');
+                throw new Exception('Can\'t write '.$output.', must run as root!');
             }
         }
     }
