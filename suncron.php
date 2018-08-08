@@ -226,6 +226,15 @@ try {
 
         $logger->err(1, str_repeat('-', 78));
 
+        if ($test || $getopt->get('-s')) {
+            // Output crontab to stdout
+            $output = false;
+        } else {
+            // Build file name from config file
+            $output = pathinfo($conf_file);
+            $output = '/etc/cron.d/suncron-php-'.str_replace('.', '_', $output['filename']);
+        }
+
         $crontab = [
             '#',
             '# WARNING - this file is automatic generated, any changes will be lost!',
@@ -241,17 +250,19 @@ try {
             $crontab[] = null;
         }
 
-        $crontab[] = '# Run itself sometime in the 1st 5 minutes of the day and recreate this file each night';
-        $crontab[] = rand(0, 5).' 0 * * * root '.$self.' '.$conf_file;
-        $crontab[] = null;
-        $crontab[] = '# Suncron entries';
+        if ($output) {
+            // Only if write crontab directly add auto recall line
+            $crontab[] = '# Run itself and re-create file each night';
+            $crontab[] = '5 0 * * * root '.$self.' '.$conf_file;
+            $crontab[] = null;
+        }
 
+        $crontab[] = '# Suncron entries';
         // Add header lines and environment to cron lines
         $crontab = implode(PHP_EOL, array_merge($crontab, $crons));
 
-        if ($test) {
-            $logger->err(1, '<<bold>><<blue>># '.$output);
-            $logger->err(1, '<<bold>><<blue>>'.$crontab);
+        if (!$output) {
+            $logger->out(0, '<<blue>>'.$crontab);
         } else {
             $bytes = @file_put_contents($output,  $crontab.PHP_EOL.PHP_EOL.'# EOF');
             if ($bytes > 0) {
