@@ -29,6 +29,7 @@ $version = '<<bold yellow>>SunCron/PHP v'.file_get_contents(__DIR__.'/.version')
  * Command line options
  */
 $options = [
+    's,stdout'  => 'Write cron entries to stdout.',
     't,test'    => 'Test mode, only analyse configuration (sets verbosity to 1)',
     'r,remove'  => 'Remove the created cron file',
     'v*'        => 'Verbosity level, multiple use increases verbosity (max. 2)',
